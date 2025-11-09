@@ -5,6 +5,7 @@ const {
   saveFile,
   getTimestamp,
 } = require("./utils");
+const SetRegistry = require("./SetRegistry");
 
 (async () => {
   const browser = await initBrowser();
@@ -49,31 +50,46 @@ const {
   const timestamp = getTimestamp();
 
   // Define output directories
-  const htmlDir = path.join(__dirname, "retiring-soon-pages");
-  const txtDir = path.join(__dirname, "set-numbers");
+  const htmlDir = path.join(__dirname, "data", "retiring-soon-pages");
+  const registryPath = path.join(__dirname, "data", "set-registry.json");
 
   // Save HTML content
   const htmlFilename = `retiring-soon-${timestamp}.html`;
   saveFile(htmlFilename, content, htmlDir);
   console.log(
-    `HTML content saved to: ${path.join("retiring-soon-pages", htmlFilename)}`
+    `HTML content saved to: ${path.join(
+      "data/retiring-soon-pages",
+      htmlFilename
+    )}`
   );
 
-  // Save extracted set numbers to a text file
-  const txtFilename = `set-numbers-${timestamp}.txt`;
+  // Update registry with discovered sets
+  const registry = new SetRegistry(registryPath);
 
-  let txtContent = "LEGO Sets Retiring Soon - Featured Sets\n";
-  txtContent += "=".repeat(50) + "\n\n";
+  let newSets = 0;
+  let updatedSets = 0;
 
-  setNumbers.forEach((set, index) => {
-    txtContent += `${index + 1}. Set Number: ${set.setNumber}\n`;
-    txtContent += `   Name: ${set.setName}\n`;
-    txtContent += `   URL: ${set.url}\n\n`;
+  setNumbers.forEach((set) => {
+    const wasNew = !registry.getSet(set.setNumber);
+    registry.addSet(set.setNumber, {
+      name: set.setName,
+      url: set.url,
+    });
+    if (wasNew) {
+      newSets++;
+    } else {
+      updatedSets++;
+    }
   });
 
-  saveFile(txtFilename, txtContent, txtDir);
-  console.log(`Set numbers saved to: ${path.join("set-numbers", txtFilename)}`);
-  console.log(`\nFound ${setNumbers.length} featured retiring sets:`);
+  registry.save();
+
+  console.log(`\nRegistry updated:`);
+  console.log(`  - Total sets in registry: ${registry.count()}`);
+  console.log(`  - New sets found: ${newSets}`);
+  console.log(`  - Existing sets updated: ${updatedSets}`);
+
+  console.log(`\nFeatured retiring sets this scan:`);
   setNumbers.forEach((set) => {
     console.log(`  - ${set.setNumber}: ${set.setName}`);
   });

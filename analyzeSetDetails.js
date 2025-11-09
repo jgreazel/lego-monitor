@@ -205,7 +205,7 @@ function formatSetDetailsAsText(details) {
 (async () => {
   try {
     // Find the most recent set-details directory
-    const setDetailsBaseDir = path.join(__dirname, "set-details");
+    const setDetailsBaseDir = path.join(__dirname, "data", "set-details");
 
     if (!fs.existsSync(setDetailsBaseDir)) {
       console.error("Error: set-details directory not found!");
@@ -225,9 +225,9 @@ function formatSetDetailsAsText(details) {
     }
 
     const latestDir = path.join(setDetailsBaseDir, dirs[0]);
-    console.log(
-      `Analyzing sets from: ${path.relative(__dirname, latestDir)}\n`
-    );
+    const fetchTimestamp = dirs[0]; // Use the directory name as timestamp
+
+    console.log(`Analyzing sets from: data/set-details/${fetchTimestamp}\n`);
 
     // Get all HTML files
     const files = fs.readdirSync(latestDir).filter((f) => f.endsWith(".html"));
@@ -239,12 +239,12 @@ function formatSetDetailsAsText(details) {
 
     console.log(`Found ${files.length} set(s) to analyze:\n`);
 
-    // Create output directory
-    const timestamp = getTimestamp();
+    // Create output directory matching the fetch timestamp
     const outputDir = path.join(
       __dirname,
+      "data",
       "set-analysis",
-      `analysis-${timestamp}`
+      fetchTimestamp
     );
     ensureDirectoryExists(outputDir);
 
@@ -272,9 +272,10 @@ function formatSetDetailsAsText(details) {
 
     // Create summary file
     console.log(`\nCreating summary report...`);
-    let summary = "LEGO Sets Retiring Soon - Complete Analysis Summary\n";
+    let summary = "LEGO Sets Analysis Summary\n";
     summary += "=".repeat(70) + "\n\n";
     summary += `Total Sets Analyzed: ${allSetsData.length}\n`;
+    summary += `Fetch Timestamp: ${fetchTimestamp}\n`;
     summary += `Analysis Date: ${new Date().toLocaleString()}\n\n`;
     summary += "=".repeat(70) + "\n\n";
 
@@ -293,11 +294,22 @@ function formatSetDetailsAsText(details) {
     saveFile("_summary.txt", summary, outputDir);
     console.log(`✓ Saved summary to _summary.txt`);
 
+    // Save JSON data for historical tracking
+    const jsonData = {
+      fetchTimestamp,
+      analysisDate: new Date().toISOString(),
+      setCount: allSetsData.length,
+      sets: allSetsData,
+    };
+    saveFile(
+      "analysis-data.json",
+      JSON.stringify(jsonData, null, 2),
+      outputDir
+    );
+    console.log(`✓ Saved JSON data to analysis-data.json`);
+
     console.log(
-      `\n✓ Complete! All analysis files saved to: ${path.relative(
-        __dirname,
-        outputDir
-      )}`
+      `\n✓ Complete! Analysis saved to: data/set-analysis/${fetchTimestamp}`
     );
   } catch (error) {
     console.error(`Fatal error: ${error.message}`);

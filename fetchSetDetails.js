@@ -5,61 +5,47 @@ const {
   fetchPageContent,
   saveFile,
   getTimestamp,
-  parseSetNumbersFile,
-  findMostRecentFile,
 } = require("./utils");
+const SetRegistry = require("./SetRegistry");
 
 (async () => {
   try {
-    // Look for set-numbers files in the set-numbers directory
-    const setNumbersDir = path.join(__dirname, "set-numbers");
+    // Load the registry
+    const registryPath = path.join(__dirname, "data", "set-registry.json");
 
-    // Find the most recent set-numbers file
-    const setNumbersFile = findMostRecentFile(
-      "set-numbers-.*\\.txt",
-      setNumbersDir
-    );
-
-    if (!setNumbersFile) {
-      console.error("Error: No set-numbers txt file found!");
-      console.log(
-        "Please run getRetiringSoon.js first to generate the set numbers file."
-      );
+    if (!fs.existsSync(registryPath)) {
+      console.error("Error: Set registry not found!");
+      console.log("Please run getRetiringSoon.js first to build the registry.");
       process.exit(1);
     }
 
-    console.log(
-      `Using set numbers file: ${path.relative(__dirname, setNumbersFile)}`
-    );
-
-    // Parse the set numbers file
-    const sets = parseSetNumbersFile(setNumbersFile);
+    const registry = new SetRegistry(registryPath);
+    const sets = registry.getAllSets();
 
     if (sets.length === 0) {
-      console.error("Error: No sets found in the file!");
+      console.error("Error: No sets found in registry!");
       process.exit(1);
     }
 
-    console.log(`Found ${sets.length} sets to fetch:\n`);
+    console.log(`Found ${sets.length} sets in registry to fetch:\n`);
     sets.forEach((set, index) => {
       console.log(`  ${index + 1}. ${set.name} (${set.setNumber})`);
     });
     console.log("");
 
-    // Create a directory for set detail pages
+    // Create a timestamped directory for this fetch
     const timestamp = getTimestamp();
-    const outputDir = path.join(
-      __dirname,
-      "set-details",
-      `set-details-${timestamp}`
-    );
-    console.log(`Output directory: ${path.relative(__dirname, outputDir)}\n`);
+    const outputDir = path.join(__dirname, "data", "set-details", timestamp);
+    console.log(`Output directory: data/set-details/${timestamp}\n`);
 
     // Initialize browser
     const browser = await initBrowser();
     const page = await browser.newPage();
 
     // Fetch each set's detail page
+    let successCount = 0;
+    let errorCount = 0;
+
     for (let i = 0; i < sets.length; i++) {
       const set = sets[i];
       console.log(
@@ -71,6 +57,7 @@ const {
         const filename = `set-${set.setNumber}.html`;
         saveFile(filename, content, outputDir);
         console.log(`  ✓ Saved to ${filename}`);
+        successCount++;
 
         // Add a small delay to be respectful to the server
         if (i < sets.length - 1) {
@@ -78,17 +65,16 @@ const {
         }
       } catch (error) {
         console.error(`  ✗ Error fetching ${set.setNumber}: ${error.message}`);
+        errorCount++;
       }
     }
 
     await browser.close();
 
-    console.log(
-      `\n✓ Complete! All set details saved to: ${path.relative(
-        __dirname,
-        outputDir
-      )}`
-    );
+    console.log(`\n✓ Complete!`);
+    console.log(`  - Successfully fetched: ${successCount} sets`);
+    console.log(`  - Errors: ${errorCount} sets`);
+    console.log(`  - Saved to: data/set-details/${timestamp}`);
   } catch (error) {
     console.error(`Fatal error: ${error.message}`);
     process.exit(1);

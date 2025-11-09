@@ -1,8 +1,5 @@
-# Output directories
-retiring-soon-pages/
-set-numbers/
-set-details/
-set-analysis/
+# Data directory (contains all fetched and analyzed data)
+data/
 
 # Node modules
 node_modules/

@@ -5,28 +5,31 @@ A set of scripts to monitor LEGO sets that are retiring soon from the BrickEcono
 ## Files
 
 - **`utils.js`** - Shared utility functions used by all scripts
-- **`getRetiringSoon.js`** - Fetches the retiring soon page and extracts featured set numbers
-- **`fetchSetDetails.js`** - Visits each set's detail page and saves the HTML
+- **`SetRegistry.js`** - Registry management for tracking unique sets over time
+- **`getRetiringSoon.js`** - Fetches the retiring soon page and maintains set registry
+- **`fetchSetDetails.js`** - Fetches detail pages for all sets in the registry
 - **`analyzeSetDetails.js`** - Analyzes set HTML files and extracts pricing, predictions, and details
 
 ## Usage
 
-### Step 1: Get Retiring Soon Sets
+### Step 1: Discover Retiring Soon Sets
 
-First, run the script to fetch the list of retiring sets:
+First, run the script to fetch the retiring soon page and update the registry:
 
 ```bash
 node getRetiringSoon.js
 ```
 
-This will create:
+This will:
 
-- `retiring-soon-pages/retiring-soon-{timestamp}.html` - Full HTML page
-- `set-numbers/set-numbers-{timestamp}.txt` - Extracted set numbers with URLs
+- Fetch the current retiring soon featured sets
+- Update `data/set-registry.json` with any new sets found
+- Save HTML snapshot to `data/retiring-soon-pages/retiring-soon-{timestamp}.html`
+- Track first seen date, last seen date, and times found for each set
 
 ### Step 2: Fetch Set Detail Pages
 
-Next, run the script to fetch individual set detail pages:
+Next, fetch current details for ALL sets in your registry:
 
 ```bash
 node fetchSetDetails.js
@@ -34,14 +37,14 @@ node fetchSetDetails.js
 
 This will:
 
-- Automatically find the most recent file in `set-numbers/` directory
-- Visit each set's URL
-- Save HTML files to: `set-details/set-details-{timestamp}/`
-- Each file will be named: `set-{setNumber}.html`
+- Read all sets from `data/set-registry.json`
+- Fetch current detail pages for every set
+- Save HTML files to: `data/set-details/{timestamp}/set-{setNumber}.html`
+- Creates a timestamped snapshot of all set details
 
 ### Step 3: Analyze Set Details
 
-Finally, run the script to analyze the set HTML files and extract key data:
+Finally, analyze the most recent fetch to extract structured data:
 
 ```bash
 node analyzeSetDetails.js
@@ -49,52 +52,84 @@ node analyzeSetDetails.js
 
 This will:
 
-- Automatically find the most recent `set-details-{timestamp}/` directory
+- Find the most recent `data/set-details/{timestamp}/` directory
 - Parse each HTML file to extract:
   - Set information (name, theme, pieces, minifigs, ratings)
   - Pricing data (retail, market, current value)
   - Retirement predictions (expected date, growth rate, future value)
-  - Retirement risk assessment
-- Save individual analysis reports to: `set-analysis/analysis-{timestamp}/`
-- Create a summary file with all sets: `_summary.txt`
+- Save to `data/set-analysis/{timestamp}/`:
+  - Individual set analysis: `set-{setNumber}-analysis.txt`
+  - Summary report: `_summary.txt`
+  - JSON data for historical tracking: `analysis-data.json`
 
-## Example Output Structure
+### Historical Tracking Workflow
+
+Run all three scripts periodically (daily, weekly, etc.) to build historical data:
+
+```bash
+# Daily monitoring workflow
+node getRetiringSoon.js    # Update registry with latest featured sets
+node fetchSetDetails.js    # Fetch current prices for all tracked sets
+node analyzeSetDetails.js  # Extract and save structured data
+```
+
+Each run creates timestamped snapshots, allowing you to:
+
+- Track price changes over time
+- Monitor retirement date predictions
+- Identify optimal selling times
+- Compare market trends
+
+## Directory Structure
 
 ```
 lego-monitor/
 ├── getRetiringSoon.js
 ├── fetchSetDetails.js
 ├── analyzeSetDetails.js
+├── SetRegistry.js
 ├── utils.js
 ├── package.json
-├── retiring-soon-pages/
-│   └── retiring-soon-2025-11-09T21-46-40-971Z.html
-├── set-numbers/
-│   └── set-numbers-2025-11-09T21-46-40-971Z.txt
-├── set-details/
-│   └── set-details-2025-11-09T21-50-00-123Z/
-│       ├── set-75331.html
-│       ├── set-76178.html
-│       └── set-76917.html
-└── set-analysis/
-    └── analysis-2025-11-09T22-00-00-123Z/
-        ├── _summary.txt
-        ├── set-75331-analysis.txt
-        ├── set-76178-analysis.txt
-        └── set-76917-analysis.txt
+└── data/                                    # All data lives here
+    ├── set-registry.json                    # Master registry of all sets
+    ├── retiring-soon-pages/                 # Historical snapshots
+    │   ├── retiring-soon-2025-11-09T10-00-00-000Z.html
+    │   └── retiring-soon-2025-11-10T10-00-00-000Z.html
+    ├── set-details/                         # Timestamped detail fetches
+    │   ├── 2025-11-09T10-30-00-000Z/
+    │   │   ├── set-75331.html
+    │   │   ├── set-76178.html
+    │   │   └── set-76917.html
+    │   └── 2025-11-10T10-30-00-000Z/
+    │       ├── set-75331.html
+    │       ├── set-76178.html
+    │       └── set-76917.html
+    └── set-analysis/                        # Timestamped analyses
+        ├── 2025-11-09T10-30-00-000Z/
+        │   ├── _summary.txt
+        │   ├── analysis-data.json           # JSON for programmatic access
+        │   ├── set-75331-analysis.txt
+        │   ├── set-76178-analysis.txt
+        │   └── set-76917-analysis.txt
+        └── 2025-11-10T10-30-00-000Z/
+            ├── _summary.txt
+            ├── analysis-data.json
+            └── ...
 ```
 
 ## Features
 
+- **Set Registry**: Maintains a persistent registry of all discovered sets
+- **Historical Tracking**: Timestamped snapshots allow tracking changes over time
 - **Stealth Mode**: Uses puppeteer-extra with stealth plugin to avoid detection
-- **Systematic Extraction**: Reliably extracts set numbers using CSS selectors and regex
+- **Systematic Extraction**: Reliably extracts set numbers using CSS selectors and h4 headers
 - **Comprehensive Analysis**: Extracts pricing, predictions, retirement data, and set details
-- **Timestamped Files**: All output files include timestamps to prevent overwriting
-- **Organized Output**: Files are organized into separate directories (retiring-soon-pages, set-numbers, set-details, set-analysis)
+- **Scalable Architecture**: Designed for monitoring market rates over time to identify selling opportunities
+- **JSON Export**: Structured data in JSON format for programmatic analysis
 - **Progress Feedback**: Console output shows progress and status
 - **Error Handling**: Gracefully handles errors and continues processing
 - **Rate Limiting**: Includes 1-second delay between requests to be respectful to the server
-- **Summary Reports**: Creates individual analysis files plus a summary of all sets
+- **Summary Reports**: Creates individual analysis files plus summary and JSON data
 
 ## Utility Functions (utils.js)
 
