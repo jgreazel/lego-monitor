@@ -311,48 +311,51 @@ function checkBuyingOpportunities(previous, current) {
 }
 
 /**
- * Check for sets approaching retirement
+ * Check for newly retired sets (moved from available to retired)
+ * @param {Object} previous - Previous snapshot data
  * @param {Object} current - Current snapshot data
- * @returns {Array} Array of approaching retirement alerts
+ * @returns {Array} Array of newly retired set alerts
  */
-function checkApproachingRetirement(current) {
+function checkNewlyRetiredSets(previous, current) {
   const alerts = [];
 
-  for (const currentSet of current.sets) {
-    // Skip already retired sets
-    if (currentSet.retired && currentSet.retired !== "") continue;
+  const prevSets = new Map(previous.sets.map((s) => [s.setNumber, s]));
 
-    if (isApproachingRetirement(currentSet.retirementEstimate)) {
+  for (const currentSet of current.sets) {
+    const prevSet = prevSets.get(currentSet.setNumber);
+
+    if (!prevSet) continue;
+
+    // Check if set just became retired
+    const wasNotRetired = !prevSet.retired || prevSet.retired === "";
+    const isNowRetired = currentSet.retired && currentSet.retired !== "";
+
+    if (wasNotRetired && isNowRetired) {
       const msrp = parsePrice(currentSet.retailPrice);
       const currentPrice = parsePrice(currentSet.marketPrice);
       const predictedPop = parsePercent(currentSet.retirementPop);
-      const timeframe = extractRetirementTimeframe(
-        currentSet.retirementEstimate
-      );
+      const priceChange = ((currentPrice - msrp) / msrp) * 100;
 
-      // Determine if it's a good buy (below or near MSRP)
-      const isBelowMSRP = currentPrice < msrp;
-      const isNearMSRP = currentPrice <= msrp * 1.05; // Within 5% of MSRP
-
-      if (isBelowMSRP || isNearMSRP) {
-        alerts.push({
-          type: "APPROACHING_RETIREMENT",
-          priority: "MEDIUM",
-          setNumber: currentSet.setNumber,
-          name: currentSet.name,
-          message: `Set ${currentSet.setNumber} (${currentSet.name}) is approaching retirement - Last chance to buy!`,
-          details: {
-            retirementEstimate: timeframe,
-            currentPrice: `$${currentPrice.toFixed(2)}`,
-            msrp: `$${msrp.toFixed(2)}`,
-            priceStatus: isBelowMSRP ? "Below MSRP" : "Near MSRP",
-            predictedPop: `+${predictedPop.toFixed(2)}%`,
-            recommendation: isBelowMSRP
-              ? "Strong buy - below retail"
-              : "Good buy - at retail",
-          },
-        });
-      }
+      alerts.push({
+        type: "NEWLY_RETIRED",
+        priority: "HIGH",
+        setNumber: currentSet.setNumber,
+        name: currentSet.name,
+        message: `Set ${currentSet.setNumber} (${currentSet.name}) has just retired!`,
+        details: {
+          retiredDate: currentSet.retired,
+          msrp: `$${msrp.toFixed(2)}`,
+          currentPrice: `$${currentPrice.toFixed(2)}`,
+          priceChange: `${priceChange >= 0 ? "+" : ""}${priceChange.toFixed(
+            2
+          )}%`,
+          predictedPop: `+${predictedPop.toFixed(2)}%`,
+          recommendation:
+            priceChange >= predictedPop
+              ? "Pop achieved! Monitor for selling opportunity"
+              : "Watch for retirement pop in coming weeks",
+        },
+      });
     }
   }
 
@@ -496,10 +499,9 @@ async function main() {
 
   // Run all alert checks
   const allAlerts = {
-    "Retirement Events": detectRetirementEvents(previous, current),
+    "Newly Retired Sets": checkNewlyRetiredSets(previous, current),
     "Retirement Pop Achieved": checkRetirementPopAchievement(previous, current),
     "Buying Opportunities": checkBuyingOpportunities(previous, current),
-    "Approaching Retirement": checkApproachingRetirement(current),
     "ROI Targets (20%)": checkROITargets(previous, current, 20),
   };
 
