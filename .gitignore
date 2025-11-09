@@ -1,0 +1,14 @@
+# Output directories
+retiring-soon-pages/
+set-numbers/
+set-details/
+
+# Node modules
+node_modules/
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
