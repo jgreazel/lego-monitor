@@ -33,62 +33,35 @@ function extractSetDetails(html, setNumber) {
       usedRange: "",
     },
     availability: "",
-    retirementStatus: "",
-    retirementDate: "",
-    predictions: {
-      annualGrowth: "",
-      valueAfterRetirement: "",
-      retirementRisk: "",
-    },
+    retired: "",
+    retirementEstimate: "",
+    retirementPop: "",
+    annualGrowthFirstYear: "",
+    annualGrowthSecondYear: "",
+    oneYearRetiredValue: "",
+    fiveYearsRetiredValue: "",
     pricePerPiece: "",
     rating: "",
     reviewCount: "",
   };
 
   try {
-    // Extract JSON-LD structured data
-    const jsonLdScript = $('script[type="application/ld+json"]').first();
-    if (jsonLdScript.length) {
-      const jsonData = JSON.parse(jsonLdScript.html());
-      details.name = jsonData.name || "";
-      details.rating = jsonData.aggregateRating?.ratingValue || "";
-      details.reviewCount = jsonData.aggregateRating?.reviewCount || "";
-
-      if (jsonData.offers) {
-        details.marketPrice = `$${jsonData.offers.lowPrice} - $${jsonData.offers.highPrice}`;
-      }
-    }
-
-    // Extract meta description for pieces info
-    const metaDesc = $('meta[name="description"]').attr("content") || "";
-    const piecesMatch = metaDesc.match(/(\d{1,3}(?:,\d{3})*) piece/);
-    if (piecesMatch) {
-      details.pieces = piecesMatch[1];
-    }
-
-    // Extract theme from breadcrumb
-    const breadcrumbScript = $('script[type="application/ld+json"]').eq(1);
-    if (breadcrumbScript.length) {
-      try {
-        const breadcrumbData = JSON.parse(breadcrumbScript.html());
-        if (
-          breadcrumbData.itemListElement &&
-          breadcrumbData.itemListElement[1]
-        ) {
-          details.theme = breadcrumbData.itemListElement[1].name || "";
-        }
-      } catch (e) {
-        // Ignore parsing errors
-      }
-    }
-
-    // Extract from row list sections
-    $(".row.rowlist").each((i, elem) => {
+    // Extract from "Set Details" section
+    const setDetailsBox = $("h4:contains('Set Details')").parent().next();
+    setDetailsBox.find(".row.rowlist").each((i, elem) => {
       const label = $(elem).find(".text-muted").first().text().trim();
-      const value = $(elem).find(".col-xs-7").text().trim();
+      const value = $(elem).find(".col-xs-7").first().text().trim();
 
-      if (label.includes("Availability")) {
+      if (label.includes("Name")) {
+        details.name = value;
+      } else if (label.includes("Theme")) {
+        details.theme = $(elem).find(".col-xs-7 a").first().text().trim();
+      } else if (label.includes("Year")) {
+        details.year = $(elem).find(".col-xs-7 a").first().text().trim();
+      } else if (label.includes("Availability")) {
         details.availability = value;
+      } else if (label.includes("Retired")) {
+        details.retired = value;
       } else if (label.includes("Pieces")) {
         const piecesText = value;
         const piecesNum = piecesText.match(/^([\d,]+)/);
@@ -101,10 +74,19 @@ function extractSetDetails(html, setNumber) {
         if (minifigsNum) details.minifigs = minifigsNum[1];
         const valueMatch = minifigsText.match(/Value \$(\d+\.\d+)/);
         if (valueMatch) details.minifigsValue = `$${valueMatch[1]}`;
-      } else if (label.includes("Retail price")) {
-        details.retailPrice = value;
+      }
+    });
+
+    // Extract from "Set Pricing" section
+    const setPricingBox = $("h4:contains('Set Pricing')").parent().next();
+    setPricingBox.find(".row.rowlist").each((i, elem) => {
+      const label = $(elem).find(".text-muted").first().text().trim();
+      const value = $(elem).find(".col-xs-7").first();
+
+      if (label.includes("Retail price")) {
+        details.retailPrice = value.text().trim();
       } else if (label.includes("Market price")) {
-        const marketText = value;
+        const marketText = value.text().trim();
         const priceMatch = marketText.match(/\$[\d,]+\.?\d*/);
         if (priceMatch) details.marketPrice = priceMatch[0];
         const changeMatch = marketText.match(/([-+]?\d+\.?\d*%)/);
@@ -112,62 +94,44 @@ function extractSetDetails(html, setNumber) {
       }
     });
 
-    // Extract retirement and prediction information from description
-    const description = $(".mt-20").first().text();
+    // Extract from "Set Predictions" section
+    const setPredictionsBox = $("h4:contains('Set Predictions')")
+      .parent()
+      .next();
+    setPredictionsBox.find(".row.rowlist").each((i, elem) => {
+      const label = $(elem).find(".text-muted").first().text().trim();
+      const value = $(elem).find(".col-xs-7").first();
 
-    // Extract retirement date
-    const retirementMatch = description.match(
-      /estimated to retire sometime within\s+(.+?)\./
-    );
-    if (retirementMatch) {
-      details.retirementDate = retirementMatch[1].trim();
-    }
-
-    // Extract annual growth prediction
-    const growthMatch = description.match(
-      /expected annual growth will be close to\s+(\d+%)/
-    );
-    if (growthMatch) {
-      details.predictions.annualGrowth = growthMatch[1];
-    }
-
-    // Extract value prediction after retirement
-    const valueMatch = description.match(
-      /valuing the set between\s+\$(\d+)\s+and\s+\$(\d+)/
-    );
-    if (valueMatch) {
-      details.predictions.valueAfterRetirement = `$${valueMatch[1]} - $${valueMatch[2]}`;
-    }
-
-    // Extract current average price
-    const currentPriceMatch = description.match(
-      /current average price.*?is around\s+\$(\d+)/
-    );
-    if (currentPriceMatch) {
-      details.currentValue.newSealed = `$${currentPriceMatch[1]}`;
-    }
-
-    // Extract retirement risk
-    const retirementRiskDiv = $(".mt-20").filter((i, el) => {
-      return $(el).text().includes("Retirement risk");
+      if (label.includes("Retirement") && !label.includes("pop")) {
+        details.retirementEstimate = value.text().trim();
+      } else if (label.includes("Retirement pop")) {
+        details.retirementPop = value.text().trim();
+      } else if (label.includes("Annual growth")) {
+        // Get both annual growth values
+        const growthDivs = value.find("div");
+        if (growthDivs.length >= 1) {
+          details.annualGrowthFirstYear = growthDivs.eq(0).text().trim();
+        }
+        if (growthDivs.length >= 2) {
+          details.annualGrowthSecondYear = growthDivs.eq(1).text().trim();
+        }
+      } else if (label.includes("1 year retired")) {
+        details.oneYearRetiredValue = value.find("div").first().text().trim();
+      } else if (label.includes("5 years retired")) {
+        details.fiveYearsRetiredValue = value.find("div").first().text().trim();
+      }
     });
-    if (retirementRiskDiv.length) {
-      details.predictions.retirementRisk = retirementRiskDiv
-        .text()
-        .replace(/Retirement risk\./, "")
-        .trim();
-    }
 
-    // Check retirement status
-    if (
-      description.includes("Retiring soon") ||
-      $("small.text-muted:contains('Retiring soon')").length
-    ) {
-      details.retirementStatus = "Retiring soon";
-    } else if (details.availability.includes("Retired")) {
-      details.retirementStatus = "Retired";
-    } else if (details.availability.includes("retail")) {
-      details.retirementStatus = "Available at retail";
+    // Extract rating from JSON-LD if available
+    const jsonLdScript = $('script[type="application/ld+json"]').first();
+    if (jsonLdScript.length) {
+      try {
+        const jsonData = JSON.parse(jsonLdScript.html());
+        details.rating = jsonData.aggregateRating?.ratingValue || "";
+        details.reviewCount = jsonData.aggregateRating?.reviewCount || "";
+      } catch (e) {
+        // Ignore parsing errors
+      }
     }
   } catch (error) {
     console.error(`Error parsing set ${setNumber}: ${error.message}`);
@@ -199,7 +163,7 @@ function formatSetDetailsAsText(details) {
     details.reviewCount ? ` (${details.reviewCount} reviews)` : ""
   }\n`;
   text += `Availability: ${details.availability}\n`;
-  text += `Retirement Status: ${details.retirementStatus}\n`;
+  text += `Retired: ${details.retired}\n`;
   text += "\n";
 
   text += "PRICING INFORMATION\n";
@@ -224,18 +188,12 @@ function formatSetDetailsAsText(details) {
 
   text += "RETIREMENT & PREDICTIONS\n";
   text += "-".repeat(70) + "\n";
-  if (details.retirementDate) {
-    text += `Expected Retirement: ${details.retirementDate}\n`;
-  }
-  if (details.predictions.annualGrowth) {
-    text += `Predicted Annual Growth: ${details.predictions.annualGrowth}\n`;
-  }
-  if (details.predictions.valueAfterRetirement) {
-    text += `Expected Value After Retirement: ${details.predictions.valueAfterRetirement}\n`;
-  }
-  if (details.predictions.retirementRisk) {
-    text += `\nRetirement Risk:\n${details.predictions.retirementRisk}\n`;
-  }
+  text += `Retirement Estimate: ${details.retirementEstimate}\n`;
+  text += `Retirement Pop: ${details.retirementPop}\n`;
+  text += `Annual Growth (First Year): ${details.annualGrowthFirstYear}\n`;
+  text += `Annual Growth (Second Year): ${details.annualGrowthSecondYear}\n`;
+  text += `1 Year Retired Value: ${details.oneYearRetiredValue}\n`;
+  text += `5 Years Retired Value: ${details.fiveYearsRetiredValue}\n`;
   text += "\n";
 
   text += "-".repeat(70) + "\n";
@@ -324,13 +282,11 @@ function formatSetDetailsAsText(details) {
       summary += `${index + 1}. Set ${details.setNumber}: ${details.name}\n`;
       summary += `   Theme: ${details.theme}\n`;
       summary += `   Retail: ${details.retailPrice} | Market: ${details.marketPrice}\n`;
-      summary += `   Status: ${details.retirementStatus}\n`;
-      if (details.retirementDate) {
-        summary += `   Retirement: ${details.retirementDate}\n`;
-      }
-      if (details.predictions.annualGrowth) {
-        summary += `   Growth: ${details.predictions.annualGrowth} | Value: ${details.predictions.valueAfterRetirement}\n`;
-      }
+      summary += `   Availability: ${details.availability}\n`;
+      summary += `   Retired: ${details.retired}\n`;
+      summary += `   Retirement Estimate: ${details.retirementEstimate}\n`;
+      summary += `   Annual Growth (1Y): ${details.annualGrowthFirstYear}\n`;
+      summary += `   5 Years Retired Value: ${details.fiveYearsRetiredValue}\n`;
       summary += "\n";
     });
 
