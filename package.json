@@ -4,7 +4,12 @@
   "description": "",
   "main": "getRetiringSoon.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "collect": "node getRetiringSoon.js && node fetchSetDetails.js && node analyzeSetDetails.js",
+    "analyze": "node priceTracker.js && node alertMonitor.js",
+    "monitor": "npm run collect && npm run analyze",
+    "track": "node priceTracker.js",
+    "alerts": "node alertMonitor.js"
   },
   "keywords": [],
   "author": "",
