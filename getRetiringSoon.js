@@ -17,28 +17,61 @@ const SetRegistry = require("./SetRegistry");
     "https://www.brickeconomy.com/sets/retiring-soon"
   );
 
-  // Extract LEGO set numbers from the three theme-stat divs
+  // Extract LEGO set numbers from specific categories
   const setNumbers = await page.evaluate(() => {
     const results = [];
+    const targetCategories = ["Star Wars", "Marvel Super Heroes"];
 
-    // Find all theme-stat divs
-    const themeStats = document.querySelectorAll(".theme-stat");
+    // Find all h3 headers
+    const headers = document.querySelectorAll("h3.mt-30.mb-10");
 
-    themeStats.forEach((div) => {
-      // Find the link within each theme-stat div
-      const link = div.querySelector('a[href^="/set/"]');
-      if (link) {
-        const href = link.getAttribute("href");
-        // Extract set number from href pattern: /set/{NUMBER}-{VARIANT}/...
-        const match = href.match(/\/set\/(\d+)-/);
-        if (match) {
-          const setNumber = match[1];
-          const setName = link.textContent.trim();
-          results.push({
-            setNumber: setNumber,
-            setName: setName,
-            url: `https://www.brickeconomy.com${href}`,
+    headers.forEach((header) => {
+      const categoryName = header.textContent.trim();
+
+      // Check if this is one of our target categories
+      if (targetCategories.includes(categoryName)) {
+        // Navigate up to the parent row, then get all following rows until the next category header
+        let currentRow = header.closest("tr");
+        if (!currentRow) return;
+
+        // Move to the next sibling row
+        currentRow = currentRow.nextElementSibling;
+
+        // Iterate through rows until we hit another category header or end
+        while (currentRow) {
+          // Check if this row contains a new category header
+          const nextHeader = currentRow.querySelector("h3.mt-30.mb-10");
+          if (nextHeader) {
+            break; // Stop at the next category
+          }
+
+          // Look for set links in this row
+          const links = currentRow.querySelectorAll('a[href^="/set/"]');
+          links.forEach((link) => {
+            const href = link.getAttribute("href");
+            // Extract set number from href pattern: /set/{NUMBER}-{VARIANT}/...
+            const match = href.match(/\/set\/(\d+)-/);
+            if (match) {
+              const setNumber = match[1];
+              // Get the set name from the h4 link
+              const h4Link = currentRow.querySelector('h4 a[href^="/set/"]');
+              const setName = h4Link
+                ? h4Link.textContent.trim()
+                : link.textContent.trim();
+
+              // Avoid duplicates
+              if (!results.find((r) => r.setNumber === setNumber)) {
+                results.push({
+                  setNumber: setNumber,
+                  setName: setName,
+                  category: categoryName,
+                  url: `https://www.brickeconomy.com${href}`,
+                });
+              }
+            }
           });
+
+          currentRow = currentRow.nextElementSibling;
         }
       }
     });
@@ -89,10 +122,25 @@ const SetRegistry = require("./SetRegistry");
   console.log(`  - New sets found: ${newSets}`);
   console.log(`  - Existing sets updated: ${updatedSets}`);
 
-  console.log(`\nFeatured retiring sets this scan:`);
-  setNumbers.forEach((set) => {
-    console.log(`  - ${set.setNumber}: ${set.setName}`);
-  });
+  console.log(`\nRetiring sets found by category:`);
+
+  // Group sets by category for display
+  const starWars = setNumbers.filter((s) => s.category === "Star Wars");
+  const marvel = setNumbers.filter((s) => s.category === "Marvel Super Heroes");
+
+  if (starWars.length > 0) {
+    console.log(`\n  Star Wars (${starWars.length} sets):`);
+    starWars.forEach((set) => {
+      console.log(`    - ${set.setNumber}: ${set.setName}`);
+    });
+  }
+
+  if (marvel.length > 0) {
+    console.log(`\n  Marvel Super Heroes (${marvel.length} sets):`);
+    marvel.forEach((set) => {
+      console.log(`    - ${set.setNumber}: ${set.setName}`);
+    });
+  }
 
   await browser.close();
 })();
